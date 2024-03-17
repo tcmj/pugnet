@@ -17,16 +17,17 @@ import (
 )
 
 type AppGlobals struct {
-	Debug bool
+	Debug    bool
+	DbName   string
+	DbParams string
 }
 
-func COM() AppGlobals {
-	return AppGlobals{
-		Debug: true,
-	}
-}
+ 
 
-var constants = &AppGlobals{Debug: true}
+var constants = &AppGlobals{
+	Debug:    true,
+	DbName:   "duckdb",
+	DbParams: "?access_mode=READ_WRITE",}
 
 type Timestamp time.Time
 
@@ -79,12 +80,11 @@ const (
 
 	// defaults to an in memory database. Put a full path for a persistent one
 
-	DBNAME      string = "duckdb"
-	DB_TBL1_SEQ        = "CREATE SEQUENCE IF NOT EXISTS pugdata_seq START 1;"
-	DB_TBL2_SEQ        = "CREATE SEQUENCE IF NOT EXISTS puglabel_seq START 100;"
-	DB_TBL1_CRT        = "CREATE TABLE IF NOT EXISTS pug_data(id int8 primary key DEFAULT nextval('pugdata_seq'), thelink VARCHAR NOT NULL, description VARCHAR, created TIMESTAMP NOT NULL DEFAULT current_timestamp, updated TIMESTAMP, deleted TIMESTAMP)"
-	DB_TBL2_CRT        = "CREATE TABLE IF NOT EXISTS pug_label(id int8 primary key DEFAULT nextval('puglabel_seq'), parent_id int8, label VARCHAR NOT NULL, description VARCHAR, created TIMESTAMP NOT NULL DEFAULT current_timestamp, deleted TIMESTAMP)"
-	DB_TBL3_CRT        = "CREATE TABLE IF NOT EXISTS pug_data_label(label_id int8, data_id int8, deleted TIMESTAMP, PRIMARY KEY (label_id, data_id), FOREIGN KEY (label_id) REFERENCES pug_label (id), FOREIGN KEY (data_id) REFERENCES pug_data (id) )"
+	DB_TBL1_SEQ = "CREATE SEQUENCE IF NOT EXISTS pugdata_seq START 1;"
+	DB_TBL2_SEQ = "CREATE SEQUENCE IF NOT EXISTS puglabel_seq START 100;"
+	DB_TBL1_CRT = "CREATE TABLE IF NOT EXISTS pug_data(id int8 primary key DEFAULT nextval('pugdata_seq'), thelink VARCHAR NOT NULL, description VARCHAR, created TIMESTAMP NOT NULL DEFAULT current_timestamp, updated TIMESTAMP, deleted TIMESTAMP)"
+	DB_TBL2_CRT = "CREATE TABLE IF NOT EXISTS pug_label(id int8 primary key DEFAULT nextval('puglabel_seq'), parent_id int8, label VARCHAR NOT NULL, description VARCHAR, created TIMESTAMP NOT NULL DEFAULT current_timestamp, deleted TIMESTAMP)"
+	DB_TBL3_CRT = "CREATE TABLE IF NOT EXISTS pug_data_label(label_id int8, data_id int8, deleted TIMESTAMP, PRIMARY KEY (label_id, data_id), FOREIGN KEY (label_id) REFERENCES pug_label (id), FOREIGN KEY (data_id) REFERENCES pug_data (id) )"
 
 	DB_TBL1_INS_PST = "INSERT INTO pug_data (thelink,description) VALUES (?,?)"
 	DB_TBL2_INS_PST = "INSERT INTO pug_label (parent_id,label,description) VALUES (?,?,?)"
@@ -98,16 +98,14 @@ func main() {
 
 	defer initLogging("pugnet").Close()
 
-	data := NewPugData( "http://www.netflix.de","Search Thingy")
-	log.Trace().Msgf("New PugData created: %s",data.String())
-	
+	data := NewPugData("http://www.netflix.de", "Search Thingy")
+	log.Trace().Msgf("New PugData created: %s", data.String())
 
-	db := OpenDatabase()
+	db := OpenDatabase(constants.DbName, constants.DbParams)
 	defer db.Close()
 
 	check(db.Ping())
 
-	//db.Exec(`CREATE TABLE person (id INTEGER, name VARCHAR)`)
 	createSchemaIfNeeded(db)
 	createSomeTestdatafWanted(db)
 
@@ -164,17 +162,17 @@ func main() {
 
 // DDLs are with 'IF NOT EXISTS' so we can try to create without any hassle
 func createSchemaIfNeeded(db *sql.DB) {
-	log.Info().Msg("DDL: Check Schema: Sequences...")
+	log.Debug().Msg("DDL: Check Schema: Sequences...")
 	ExecuteUpdate(db, DB_TBL1_SEQ)
 	ExecuteUpdate(db, DB_TBL2_SEQ)
-	var step int8 = 1
-	log.Info().Msg("DDL: Check Schema: Create tables...")
+
+	log.Debug().Msg("DDL: Check Schema: Create tables...")
 	ExecuteUpdate(db, DB_TBL1_CRT)
-	step++
+
 	ExecuteUpdate(db, DB_TBL2_CRT)
-	step++
+
 	ExecuteUpdate(db, DB_TBL3_CRT)
-	step++
+
 	ExecuteUpdate(db, "CREATE TABLE person (id INTEGER, name VARCHAR)")
 }
 
@@ -232,20 +230,15 @@ func initLogging(app string) *os.File {
 	return file // to defer the Close() method!
 }
 
-func OpenDatabase() *sql.DB {
-	db, err := sql.Open(DBNAME, "?access_mode=READ_WRITE")
-	if err != nil {
-		log.Error().Err(err).Msg("")
-	}
+func OpenDatabase(drv, params string) *sql.DB {
+	db, err := sql.Open(drv, params)
+	handle(err, "cannot open database: drv=%s, params=%s", drv, params)
 	return db
 }
 
 func ExecuteUpdate(db *sql.DB, sql string, args ...any) {
-	//func ExecuteUpdate(db *sql.DB, sql string) {
 	_, err := db.Exec(sql, args...)
-	if err != nil {
-		log.Err(err).Stack().Msgf("ExecuteUpdate failed at %s", sql)
-	}
+	handle(err, "ExecuteUpdate failed at %s", sql)
 }
 
 func check(args ...interface{}) {
