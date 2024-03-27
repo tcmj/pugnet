@@ -1,6 +1,6 @@
 CREATE SEQUENCE IF NOT EXISTS pugdata_seq START 1;
 
-CREATE SEQUENCE IF NOT EXISTS puglabel_seq START 100;
+CREATE SEQUENCE IF NOT EXISTS puglabel_seq START 100 INCREMENT BY 10;
 
 CREATE TABLE IF NOT EXISTS pug_data(id int8 primary key DEFAULT nextval('pugdata_seq'), thelink VARCHAR NOT NULL, description VARCHAR, created TIMESTAMP NOT NULL DEFAULT current_timestamp, updated TIMESTAMP, deleted TIMESTAMP);
 

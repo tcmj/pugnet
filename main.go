@@ -17,7 +17,9 @@ import (
 )
 
 type AppGlobals struct {
+	AppVersion   string
 	Debug        bool
+	LogfileName  string
 	DbName       string
 	DbParams     string
 	DbSchemaFile string
@@ -25,8 +27,10 @@ type AppGlobals struct {
 }
 
 var constants = &AppGlobals{
+	AppVersion:   "0.1.0",
 	Debug:        true,
-	DbName:       "duckdb",
+	LogfileName:  "pugnet.log.json",
+	DbName:       "duckdb", // InMemory or File
 	DbParams:     "?access_mode=READ_WRITE",
 	DbSchemaFile: "sql/create_schema.sql",
 	DbDataFile:   "sql/init_data.sql",
@@ -59,17 +63,20 @@ func NewPugData(alink, desc string) *PugData {
 	}
 }
 
+// TableData: PugData2Label
 type PugData2Label struct {
 	LabelId uint64
 	DataId  uint64
 }
 
+// TableData: PugUser
 type PugUser struct {
 	Id          uint64
 	Name        string
 	Description sql.NullString
 }
 
+// TableData: PugLabel
 type PugLabel struct {
 	Id          uint64
 	ParentId    uint64
@@ -187,7 +194,7 @@ func initLogging(app string) *os.File {
 
 	// zerolog.TimeFieldFormat = zerolog.TimeFormatUnix // default is time.RFC3339
 
-	file, err := os.OpenFile("pugnet.log.json", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
+	file, err := os.OpenFile(constants.LogfileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
 	if err != nil {
 		handle(err, "Cannot open logfile!")
 	}
