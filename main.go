@@ -17,17 +17,20 @@ import (
 )
 
 type AppGlobals struct {
-	Debug    bool
-	DbName   string
-	DbParams string
+	Debug        bool
+	DbName       string
+	DbParams     string
+	DbSchemaFile string
+	DbDataFile   string
 }
 
- 
-
 var constants = &AppGlobals{
-	Debug:    true,
-	DbName:   "duckdb",
-	DbParams: "?access_mode=READ_WRITE",}
+	Debug:        true,
+	DbName:       "duckdb",
+	DbParams:     "?access_mode=READ_WRITE",
+	DbSchemaFile: "sql/create_schema.sql",
+	DbDataFile:   "sql/init_data.sql",
+}
 
 type Timestamp time.Time
 
@@ -77,20 +80,10 @@ type PugLabel struct {
 }
 
 const (
-
-	// defaults to an in memory database. Put a full path for a persistent one
-
-	DB_TBL1_SEQ = "CREATE SEQUENCE IF NOT EXISTS pugdata_seq START 1;"
-	DB_TBL2_SEQ = "CREATE SEQUENCE IF NOT EXISTS puglabel_seq START 100;"
-	DB_TBL1_CRT = "CREATE TABLE IF NOT EXISTS pug_data(id int8 primary key DEFAULT nextval('pugdata_seq'), thelink VARCHAR NOT NULL, description VARCHAR, created TIMESTAMP NOT NULL DEFAULT current_timestamp, updated TIMESTAMP, deleted TIMESTAMP)"
-	DB_TBL2_CRT = "CREATE TABLE IF NOT EXISTS pug_label(id int8 primary key DEFAULT nextval('puglabel_seq'), parent_id int8, label VARCHAR NOT NULL, description VARCHAR, created TIMESTAMP NOT NULL DEFAULT current_timestamp, deleted TIMESTAMP)"
-	DB_TBL3_CRT = "CREATE TABLE IF NOT EXISTS pug_data_label(label_id int8, data_id int8, deleted TIMESTAMP, PRIMARY KEY (label_id, data_id), FOREIGN KEY (label_id) REFERENCES pug_label (id), FOREIGN KEY (data_id) REFERENCES pug_data (id) )"
-
 	DB_TBL1_INS_PST = "INSERT INTO pug_data (thelink,description) VALUES (?,?)"
 	DB_TBL2_INS_PST = "INSERT INTO pug_label (parent_id,label,description) VALUES (?,?,?)"
 	DB_TBL3_INS_PST = "INSERT INTO pug_data_label (label_id,data_id) VALUES (?,?)"
-
-	DB_TBL1_INS = "INSERT INTO pug_data (thelink,description) VALUES ('http://google.de/bla/blub','Search')"
+	DB_TBL1_INS     = "INSERT INTO pug_data (thelink,description) VALUES ('http://google.de/bla/blub','Search')"
 )
 
 // https://pkg.go.dev/fmt#Printf  --> All Format-Identifiers
@@ -160,30 +153,23 @@ func main() {
 
 }
 
+func readWholeFileAsString(path string) string {
+	data, err := os.ReadFile(path)
+	check(err)
+	return string(data)
+}
+
 // DDLs are with 'IF NOT EXISTS' so we can try to create without any hassle
 func createSchemaIfNeeded(db *sql.DB) {
-	log.Debug().Msg("DDL: Check Schema: Sequences...")
-	ExecuteUpdate(db, DB_TBL1_SEQ)
-	ExecuteUpdate(db, DB_TBL2_SEQ)
+	log.Debug().Msg("DDL: Create/Check Schema...")
+	ExecuteUpdate(db, readWholeFileAsString(constants.DbSchemaFile))
+	//ExecuteUpdate(db, DB_TBL2_SEQ)
 
-	log.Debug().Msg("DDL: Check Schema: Create tables...")
-	ExecuteUpdate(db, DB_TBL1_CRT)
-
-	ExecuteUpdate(db, DB_TBL2_CRT)
-
-	ExecuteUpdate(db, DB_TBL3_CRT)
-
-	ExecuteUpdate(db, "CREATE TABLE person (id INTEGER, name VARCHAR)")
 }
 
 func createSomeTestdatafWanted(db *sql.DB) {
-	ExecuteUpdate(db, DB_TBL1_INS)
-
-	ExecuteUpdate(db, "INSERT INTO person VALUES (1, 'John')")
-	ExecuteUpdate(db, "INSERT INTO person VALUES (2, 'Claudia')")
-	ExecuteUpdate(db, "INSERT INTO person VALUES (3, 'Martha')")
-	db.Exec(`INSERT INTO person VALUES (44, 'Sepp')`)
-	log.Trace().Msg("rows inserted")
+	log.Trace().Msg("DML: Insert inital data...")
+	ExecuteUpdate(db, readWholeFileAsString(constants.DbDataFile))
 }
 
 // Logging will be json to a file called 'pugnet.log.json'. Also the log.Logger will be globally set ?!
